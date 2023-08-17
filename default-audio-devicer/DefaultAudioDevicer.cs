@@ -10,20 +10,18 @@ using System.Text;
 using System.Threading.Tasks;
 using AudioSwitcher.AudioApi;
 using AudioSwitcher.AudioApi.CoreAudio;
-using System.Timers;
 
 
 namespace default_audio_devicer
 {
-    public partial class DefaultAudioDevicer : ServiceBase
+    public partial class DefaultAudioDevicer : ServiceBase, IObserver<DeviceChangedArgs>
     {
-        EventLog eventLog;
-
-        Timer timer;
+        protected readonly EventLog eventLog;
 
         protected CoreAudioController controller;
         protected CoreAudioDevice defaultOut;
         protected CoreAudioDevice defaultComs;
+
         public DefaultAudioDevicer()
         {
             InitializeComponent();
@@ -36,22 +34,13 @@ namespace default_audio_devicer
             }
             eventLog.Source = "DefaultAudioDevicer";
             eventLog.Log = "DefaultAudioDevicerLog";
-
-            timer = new Timer();
         }
 
         protected override void OnStart(string[] args)
         {
             eventLog.WriteEntry("Start");
             controller = new CoreAudioController();
-            timer.Elapsed += new ElapsedEventHandler(OnElapsedTime);
-            timer.Interval = 5000;
-            timer.Enabled = true;
-        }
-
-        private void OnElapsedTime(object sender, ElapsedEventArgs e)
-        {
-            SetComsToOut();
+            controller.AudioDeviceChanged.Subscribe(this);
         }
 
         protected override void OnPause()
@@ -71,24 +60,37 @@ namespace default_audio_devicer
 
         protected void FetchDefaultDevices()
         {
-            // eventLog.WriteEntry("fetch default devices");
             defaultOut = controller.DefaultPlaybackDevice;
             defaultComs = controller.DefaultPlaybackCommunicationsDevice;
-            // eventLog.WriteEntry($"default out: {defaultOut.FullName}, default coms: {defaultComs.FullName}");
         }
 
         protected void SetComsToOut()
         {
-            // eventLog.WriteEntry("set coms to out");
             FetchDefaultDevices();
             if (defaultComs != defaultOut)
             {
-                // eventLog.WriteEntry("set coms and out different");
+                eventLog.WriteEntry(
+                    "default audio device change detected\n" + 
+                    "old device: " + defaultComs.FullName + "\n" +
+                    "new device: " + defaultOut.FullName);
                 defaultOut.SetAsDefaultCommunications();
-                // eventLog.WriteEntry("coms set to out");
                 return;
             }
-            // eventLog.WriteEntry("coms is out");
+        }
+
+        public void OnNext(DeviceChangedArgs value)
+        {
+            SetComsToOut();
+        }
+
+        public void OnError(Exception error)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void OnCompleted()
+        {
+            throw new NotImplementedException();
         }
     }
 }
